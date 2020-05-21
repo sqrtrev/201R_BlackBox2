@@ -2,6 +2,7 @@
 //
 
 #include "stdafx.h"
+#include <math.h>
 
 int Sbox[16] = {0xE, 0x3, 0x0, 0x7, 0x2, 0xC, 0xF, 0xB, 0x5, 0xA, 0x6, 0x9, 0x8, 0x1, 0x4, 0xD};
 int InverseSbox[16] = {0x2, 0xD, 0x4, 0x1, 0xE, 0x8, 0xA, 0x3, 0xC, 0xB, 0x9, 0x7, 0x5, 0xF, 0x0, 0x6};
@@ -30,14 +31,63 @@ extern "C" __declspec(dllimport) void Substitution_Inverse(int* p, int* c);
 extern "C" __declspec(dllimport) void Permutation(int* p, int* c);
 extern "C" __declspec(dllimport) void Encryption(int P, int* C);
 
+bool bit_xor(int bit) {
+	bool res = 0;
 
-int main(int argc, char* argv[])
-{
-	int LC[16][16] = { 0, };
-	int Plaintext, Ciphertext;
-	
-//	Plaintext = 0x26B7;
-//	Plaintext = 0x0000;
+	for (int i = 0; i < 16; i++) {
+		res ^= (bit >> i) & 1;
+	}
+	return res;
+}
+
+int max(unsigned int table[]) {
+	int max = 0;
+
+	for (int i = 1; i < 16; i++) {
+		int tmp = abs((0xffff + 1) / 2 - table[max]);
+		int tmp2 = abs((0xffff + 1) / 2 - table[i]);
+		if (tmp < tmp2) max = i;
+	}
+
+	return max;
+}
+
+int GetRoundKey(int mask_in, int mask_out, int block) {
+	int key = 0xAA71;
+	unsigned int key_table[16] = { 0, };
+	int res;
+
+	for (int Plaintext = 0; Plaintext <= 0xffff; Plaintext++) {
+		int Ciphertext;
+
+		Encryption(Plaintext, &Ciphertext);
+		Ciphertext ^= key;
+		Substitution_Inverse(&Ciphertext, &Ciphertext);
+
+		// Guess Key
+		// P(Cipher ^ key) == P(Cipher) ^ P(key);
+		Permutation(&Ciphertext, &Ciphertext);
+		for (int i = 0; i <= 0xf; i++) {
+			int tmp = Ciphertext;
+			tmp ^= (i << (block * 4));
+			Substitution_Inverse(&tmp, &tmp);
+			unsigned short cipher_tmp = tmp & mask_out;
+			unsigned int plain_tmp = Plaintext & mask_in;
+			bool res = bit_xor(cipher_tmp) ^ bit_xor(plain_tmp);
+			if (!res) key_table[i] += 1;
+		}
+	}
+	res = max(key_table);
+	for (int i = 0; i < block; i++) res *= 16;
+
+	return res;
+}
+
+int main(void){
+	short LC[16][16] = { 0, };	
+	unsigned int key_table[16] = { 0, };
+	unsigned int key = 0xAA71;
+	int final_key = 0;
 
 	// LC Table
 	for (int i = 0; i <= 0xf; i++) {
@@ -66,6 +116,16 @@ int main(int argc, char* argv[])
 		}
 		printf("\n");
 	}
+
+	printf("\n");
+
+	// GetRoundKey(mask_in, mask_out, block)
+	final_key += GetRoundKey(0x4, 0x1000, 3);
+	final_key += GetRoundKey(0x50, 0x900 ,2);
+	final_key += GetRoundKey(0xd000, 0x30,1);
+	final_key += GetRoundKey(0x1, 0x1, 0);
+	Permutation(&final_key, &final_key);
+	printf("0x%X", final_key);
 
 	return 0;
 }
