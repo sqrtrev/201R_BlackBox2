@@ -73,8 +73,8 @@ int GetRoundKey(int mask_in, int mask_out, int block) {
 			Substitution_Inverse(&tmp, &tmp);
 			unsigned short cipher_tmp = tmp & mask_out;
 			unsigned int plain_tmp = Plaintext & mask_in;
-			bool res = bit_xor(cipher_tmp) ^ bit_xor(plain_tmp);
-			if (!res) key_table[i] += 1;
+			bool check = bit_xor(cipher_tmp) ^ bit_xor(plain_tmp);
+			if (!check) key_table[i] += 1;
 		}
 	}
 	res = max(key_table);
